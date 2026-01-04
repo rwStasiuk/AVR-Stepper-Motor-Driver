@@ -68,6 +68,40 @@ If you are new to stepper motors, I highly recommend this [page by Oriental Moto
 
 ## BUILD/INTEGRATION
 
+This driver is written in standard C and is intended to be compiled using **avr-gcc** as part of an existing AVR firmware project. No external libraries are required beyond the standard AVR headers.
+
+### Requirements
+
+- AVR-GCC toolchain  
+- AVR libc  
+- Target device supported by `<avr/io.h>` and `<util/delay.h>`
+
+### File Integration
+
+Add the following files to your project:
+
+- `stepper.c` – driver implementation  
+- `stepper.h` – public API and configuration structures  
+
+Ensure that `stepper.c` is compiled and linked with the rest of your firmware.
+
+### Clock Frequency Configuration
+
+This driver relies on `_delay_us()` and `_delay_ms()` for timing. The CPU clock frequency must be defined correctly via `F_CPU` before including `<util/delay.h>`. The `F_CPU` macro is defined in the `stepper.h` file.
+
+```c
+
+#define F_CPU 16000000UL
+#include <util/delay.h>
+
+```
+
+Incorrect `F_CPU` values will result in inaccurate step timing and motor speed.
+
+### OPTIMIZATION
+
+It is recommended to compile with optimizations enabled (e.g. -O1, -O2, or -Os). The delay routines and stepping logic rely on predictable instruction timing, and unoptimized builds may produce inconsistent results.
+
 ---
 
 ## USEAGE EXAMPLE
@@ -142,6 +176,53 @@ Many of the driver's public configuration options are denoted by enumerators and
 
 ## EXCEPTION HANDLING
 
+All public driver functions return a StepStatus value indicating success or the reason for failure. This allows the application to detect configuration errors, invalid usage, or runtime issues without relying on assertions or undefined behavior. The return value should always be checked, especially during initialization and stepping operations.
+
+### Status Codes:
+
+The driver defines the following StepStatus values:
+
+- `STEPPER_OK`: Operation completed successfully.
+
+- `STEPPER_ERR_NULL_MOTOR_INSTANCE`: A `NULL` pointer was passed instead of a valid Stepper instance.
+
+- `STEPPER_ERR_NULL_CONFIG_INSTANCE`: A `NULL` pointer was passed instead of a valid `StepperConfig` structure.
+
+- `STEPPER_ERR_NULL_REGISTER_POINTER`: One or more GPIO register pointers in the configuration are `NULL`.
+
+- `STEPPER_ERR_INVALID_PIN_ASSIGNMENT`: One or more configured pin numbers exceed the valid range for the selected port.
+
+- `STEPPER_ERR_INVALID_FULLSTEPS_PER_REV`: `fullStepsPerRev` was set to zero, which would result in undefined timing behavior.
+
+- `STEPPER_ERR_NOT_INITIALIZED`: A public API function was called before `stepper_init()` completed successfully.
+
+- `STEPPER_ERR_INVALID_STEP_MODE`: An invalid stepping mode was passed to `stepper_set_mode()`.
+
+- `STEPPER_ERR_INVALID_STEP_DIRECTION`: An invalid direction was passed to `stepper_set_direction()`.
+
+- `STEPPER_ERR_ZERO_RPM`: A stepping operation was requested while the motor speed was set to zero.
+
+### User Guidelines
+
+- Always check the return value of `stepper_init()` before proceeding.
+
+- Setter functions should be checked during development to catch invalid parameters early.
+
+- `stepper_step()` should be checked in production code if step counts or runtime parameters may vary dynamically.
+
+- The driver does not attempt to recover from errors internally. All error handling decisions are left to the application layer.
+
+### Example
+
+```c
+
+StepStatus status = stepper_step(&stepper, 1);
+if (status != STEPPER_OK) {
+    // Handle error (log, halt, retry, etc.)
+}
+
+```
+
 ---
 
 ## SUPPORTED DEVICES/HARDWARE
@@ -167,6 +248,16 @@ Examples:
 ---
 
 ## DESIGN PHILOSOPHY
+
+This driver is designed to be simple, explicit, and predictable for classic 8-bit AVR microcontrollers. All behavior is blocking and synchronous, with no reliance on hardware timers, interrupts, or background execution.
+
+The API favors determinism over abstraction. All timing, state changes, and GPIO updates occur directly and visibly in user-invoked function calls, making execution flow easy to reason about and debug.
+
+A strict separation is maintained between configuration, internal state, and operation. Initialization is mandatory and validated, and errors are reported explicitly via return status codes rather than hidden recovery mechanisms.
+
+The driver avoids floating-point arithmetic, dynamic memory, and framework-style abstractions. Instead, it relies on fixed-point math and direct register access to remain lightweight, portable, and AVR-native.
+
+This project is intentionally scoped for low to moderate speed motion control where blocking behavior is acceptable. It is meant to serve as a clear and dependable reference implementation rather than a feature-complete motion control system.
 
 ---
 
