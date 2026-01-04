@@ -29,7 +29,7 @@ Blocking stepper motor driver for unipolar motor control on classic AVR devices
 
 ## DESCRIPTION
 
-This project provides a blocking unipolar stepper motor driver for classic AVR microcontrollers using direct GPIO control. The driver is designed to be simple, predictable, and portable across 8-bit AVR devices without relying on hardware timers, interrupts, or floating-point arithmetic. The driver is designed to control multiple motors from the same device, such that only one instance of the driver file is must be included in the users project.
+This project provides a blocking unipolar stepper motor driver for classic AVR microcontrollers using direct GPIO control. The driver is designed to be simple, predictable, and portable across 8-bit AVR devices without relying on hardware timers, interrupts, or floating-point arithmetic. The driver is designed to control multiple motors from the same device, such that only one instance of the driver and header files must be included in the users project.
 
 This driver is intended for low to moderate speed motion control for simple automation tasks where blocking behavior is acceptable. It is not intended for high-speed motion control, real-time multitasking systems, or applications requiring acceleration profiles. For those use cases, a timer- or interrupt-driven design is recommended.
 
