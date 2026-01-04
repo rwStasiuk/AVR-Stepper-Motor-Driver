@@ -11,15 +11,15 @@ Blocking stepper motor driver for unipolar motor control on classic AVR devices
   
 - [Firmware Package](#firmware-package)
   
-- [Build / Integration](#buildintegration)
+- [Build Integration](#buildintegration)
   
-- [Usage Example](#useage-example)
+- [Usage Example](#usage-example)
   
-- [Configuration Options](#configuration-options)
+- [Configuration Options](#public-api-usage)
   
 - [Exception Handling](#exception-handling)
   
-- [Supported Devices / Hardware](#supported-deviceshardware)
+- [Supported Devices and Hardware](#supported-devices-and-hardware)
   
 - [Design Philosophy](#design-philosophy)
   
@@ -29,13 +29,13 @@ Blocking stepper motor driver for unipolar motor control on classic AVR devices
 
 ## DESCRIPTION
 
-This project provides a blocking stepper motor driver for classic AVR microcontrollers using direct GPIO control. The driver is designed to be simple, predictable, and portable across 8-bit AVR devices without relying on hardware timers, interrupts, or floating-point arithmetic.
+This project provides a blocking unipolar stepper motor driver for classic AVR microcontrollers using direct GPIO control. The driver is designed to be simple, predictable, and portable across 8-bit AVR devices without relying on hardware timers, interrupts, or floating-point arithmetic. The driver is designed to control multiple motors from the same device, such that only one instance of the driver file is must be included in the users project.
+
+This driver is intended for low to moderate speed motion control for simple automation tasks where blocking behavior is acceptable. It is not intended for high-speed motion control, real-time multitasking systems, or applications requiring acceleration profiles. For those use cases, a timer- or interrupt-driven design is recommended.
 
 Motor speed is controlled using fixed-point RPM scaling (RPM × 100), and stepping is performed through pre-defined coil energization patterns for full-step, half-step, and wave-step modes. All timing is generated using _delay_us() / _delay_ms(), allowing the driver to operate independently of MCU timer resources.
 
 The driver uses an opaque Stepper structure and a separate configuration structure to enforce correct initialization and prevent accidental modification of internal state. GPIO updates are performed in a shared-port-safe manner, ensuring that unrelated pins on the same port are not disturbed.
-
-This driver is intended for low to moderate speed motion control for simple automation tasks where blocking behavior is acceptable. It is not intended for high-speed motion control, real-time multitasking systems, or applications requiring acceleration profiles. For those use cases, a timer- or interrupt-driven design is recommended.
 
 If you are new to stepper motors, I highly recommend this [page by Oriental Motor](https://www.orientalmotor.com/stepper-motors/technology/stepper-motor-basics.html).
 
@@ -66,7 +66,7 @@ If you are new to stepper motors, I highly recommend this [page by Oriental Moto
 
 ---
 
-## BUILD/INTEGRATION
+## BUILD INTEGRATION
 
 This driver is written in standard C and is intended to be compiled using **avr-gcc** as part of an existing AVR firmware project. No external libraries are required beyond the standard AVR headers.
 
@@ -87,7 +87,7 @@ Ensure that `stepper.c` is compiled and linked with the rest of your firmware.
 
 ### Clock Frequency Configuration
 
-This driver relies on `_delay_us()` and `_delay_ms()` for timing. The CPU clock frequency must be defined correctly via `F_CPU` before including `<util/delay.h>`. The `F_CPU` macro is defined in the `stepper.h` file.
+This driver relies on `_delay_us()` and `_delay_ms()` for timing. The CPU clock frequency must be defined correctly via `F_CPU` before including `<util/delay.h>`. The `F_CPU` macro is not defined in the `stepper.h` file and should be defined in the user's source code.
 
 ```c
 
@@ -104,7 +104,7 @@ It is recommended to compile with optimizations enabled (e.g. -O1, -O2, or -Os).
 
 ---
 
-## USEAGE EXAMPLE
+## USAGE EXAMPLE
 
 ```C
 #include "stepper.h"
@@ -158,19 +158,51 @@ int main(void) {
 
 ---
 
-## CONFIGURATION OPTIONS
+## PUBLIC API USAGE
 
-Many of the driver's public configuration options are denoted by enumerators and macros. Some of these options are discussed breifly here, but it is recommended to read through the header file for a detailed breakdown.
+### Initialization Lifecycle
+There are three steps involved in the initialization of a stepper motor instance:
 
-- **Port:** Port is an attribute of the configuration structure. There are several pre-defined macros which can be used for the port assignment, including STEPPER_PORT_A, STEPPER_PORT_B, STEPPER_PORT_C and STEPPER_PORT_B. These macros encapsulate the data direction and port registers to ensure that viable register pairs are used. Other stepper port macros can be easily defined as long as the AVR device uses memory-mapped DDRx / PORTx GPIO registers.
+1. Instantiate a `StepperConfig` structure and assign all attributes:
+   ```c
+   StepperConfig cfg = {
+     .port = STEPPER_PORT_B,
+     .pin1 = 0,
+     .pin2 = 1,
+     .pin3 = 2,
+     .pin4 = 3,
+     fullStepsPerRev = 2048
+   };
+   ```
 
-- **Full Steps Per Revolution:** The number of full steps the motor makes per revolution is an attribute of the configuration strucutre. Note that this value refers to the number of output steps seen at the motor shaft (i.e. gear ratio must be applied). This number can be derived from a stepper motor's datasheet as 360^o^ / internal step angle * gear ratio.
+2. Instantiate a `Stepper` strucutre with the default initialization macro:
+   ```c
+   Stepper motor1 = STEPPER_INIT;
+   ```
 
-- **RPM:** The driver interprets motor speeds in revolutions per minute and this parameter can be assigned via setter function. A scaling factor of 100 must be applied to all entries for fixed-point arithmetic (e.g. for a speed of 12.5rpm, the user should pass 1250 to the setter). To select an appropriate motor speed, visit this [RPM visualizer](https://makermotor.com/rpm-visualizer/?srsltid=AfmBOopJrw4glwppHXRBRT7lEQf-tR5PVJqZms0T5wiTYbMpBtnEf3uF).
-  
-- **Direction:** This parameter can be assigned via setter function. Motor direction is denoted by the CW (clockwise) and CCW (counter-clockwise) enumerators. The driver interprets direction looking down at the motor shaft.
-  
-- **Stepping Mode:** This parameter can be assigned via setter function. The driver supports three stepping modes, denoted by the FULLSTEP, HALFSTEP and WAVESTEP enumerators.
+3. Call the `stepper_init` function, using pointers to the previously instantiated `StepperConfig` and `Stepper` strucutres as arguments. Note that the initialization function must be called once before any other API function. It is also best practice to validate the `StepStatus` return value from `stepper_init`, ensuring that the `STEPPER_OK` enumerator is returned.
+   ```c
+   uint8_t init_status = stepper_init(&stepper, &cfg);
+   if (init_status != 0){
+     printf("Initialization Error!");
+     // handle exception
+   }
+   
+
+### Motion Configuration
+(stepper_set_mode, stepper_set_direction, stepper_set_rpm_x100)
+
+### Stepping Operations
+(stepper_step behavior, blocking semantics, interleaving)
+
+### Idling and Power Control
+(stepper_idle, torque release, power considerations)
+
+### Common Usage Patterns
+(single-step loops, batch stepping, safe stopping)
+
+### Common Mistakes
+(zero RPM, forgetting init, wrong F_CPU, blocking expectations)
 
 ---
 
@@ -263,6 +295,9 @@ This project is intentionally scoped for low to moderate speed motion control wh
 
 ## FUTURE VERSIONS
 
+- Acceleration ramp functions
+- Optional interrupt-driven, non-blocking step engine
+- API and configuration parameters for bipolar stepper motors
 
 
 
