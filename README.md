@@ -158,7 +158,9 @@ int main(void) {
 
 ---
 
-## PUBLIC API USAGE
+## API USE
+
+All API functions take as an argument a pointer to a Stepper structure (`&exampleMotor`).
 
 ### Initialization Lifecycle
 There are three steps involved in the initialization of a stepper motor instance:
@@ -180,7 +182,7 @@ There are three steps involved in the initialization of a stepper motor instance
    Stepper motor1 = STEPPER_INIT;
    ```
 
-3. Call the `stepper_init` function, using pointers to the previously instantiated `StepperConfig` and `Stepper` strucutres as arguments. Note that the initialization function must be called once before any other API function. It is also best practice to validate the `StepStatus` return value from `stepper_init`, ensuring that the `STEPPER_OK` enumerator is returned.
+3. Call the `stepper_init()` function, using pointers to the previously instantiated `StepperConfig` and `Stepper` strucutres as arguments. Note that the initialization function must be called once before any other API function. It is also best practice to validate the `StepStatus` enumerator which is returned by `stepper_init()`
    ```c
    uint8_t init_status = stepper_init(&stepper, &cfg);
    if (init_status != 0){
@@ -190,19 +192,81 @@ There are three steps involved in the initialization of a stepper motor instance
    
 
 ### Motion Configuration
-(stepper_set_mode, stepper_set_direction, stepper_set_rpm_x100)
+The user is provided with three motion control parameters, which are adjustable at runtime using the API setter functions. Some of these parameters are defined using enumerators, as detailed below.
+
+**Step Mode:** Set using `stepper_set_mode`
+- Full stepping (FULLSTEP)
+- Half stepping (HALFSTEP)
+- Wave stepping (WAVESTEP)
+
+```c
+stepper_set_mode(&motor1, HALFSTEP);
+```
+
+**Direction:** Set using `stepper_set_direction`
+- Clockwise (CW)
+- Counter-clockwise (CCW)
+
+```c
+stepper_set_direction(&motor1, CCW);
+```
+
+**Speed:** Set using `stepper_set_rpm_x100`
+- The user should pass their desired motor speed in RPM, multiplied by 100 (i.e. for a speed of 12.57rpm, pass 1257 to the setter function).
+- Speed control is implemented by changing the length of the delay between coil energization patterns.
+- Step delays are clamped between 50 and 1,000,000 microseconds, which means that motor speed is theoretically clamped between 0.03rpm and 585.94rpm. These values are purely theoretical and the achievable motor speed may vary based on torque, inertia and supply voltage constraints. The STEPPER_MIN_DELAY_US and STEPPER_MAX_DELAY_US clamps are included in the API so that advanced users may adjust them as needed by redefining the macros in the application layer.
+
+```c
+stepper_set_rpm_x100(&motor1, 1257);
+```
 
 ### Stepping Operations
-(stepper_step behavior, blocking semantics, interleaving)
+Stepping is performed using the `stepper_step()` function, which advances the motor by a specified number of steps based on the currently configured step mode, direction, and speed.
+
+```c
+stepper_step(&motor1, 200);
+```
+
+`stepper_step()` is a blocking function. Once called, it will not return until all requested steps have been completed. While interrupts are still serviced, no foreground code executes during stepping. Long step counts or low RPM values will therefore stall the main execution flow. 
+
+Internally, the function:
+- Applies the appropriate coil energization pattern
+- Updates GPIO pins atomically
+- Waits for the configured delay using _delay_us() / _delay_ms()
+- Repeats until the requested step count is reached
+
+To interleave other operations between steps, the user may call `stepper_step()` with a step count of 1 inside a loop. This allows limited foreground work to occur between steps, but all operations must complete within the configured step delay to avoid distorting the effective motor speed.
+
+```c
+for (uint16_t i = 0; i < 200; i++) {
+    stepper_step(&motor1, 1);
+    // other fast operations
+}
+```
 
 ### Idling and Power Control
-(stepper_idle, torque release, power considerations)
+After a stepping operation completes, the motor remains energized, holding its last position with full holding torque. In applications where holding torque is not required, the motor can be de-energized using `stepper_idle()`.
 
-### Common Usage Patterns
-(single-step loops, batch stepping, safe stopping)
+```c
+stepper_idle(&motor1);
+```
+
+Calling stepper_idle():
+- Clears all motor control pins
+- Removes holding torque
+- Reduces power consumption and coil heating
+- Preserves internal state (step index, mode, direction, speed)
+
+The motor can resume operation at any time by calling stepper_step() again. No reinitialization is required.
 
 ### Common Mistakes
-(zero RPM, forgetting init, wrong F_CPU, blocking expectations)
+The following issues account for most runtime errors and unexpected behavior:
+
+- Forgetting to call `stepper_init()`: All public API functions require a successfully initialized Stepper instance. Calling any function before initialization will result in `STEPPER_ERR_NOT_INITIALIZED`.
+- Attempting to step with zero RPM: If motor speed is set to zero, `stepper_step()` will return STEPPER_ERR_ZERO_RPM. Speed must be configured before stepping.
+- Incorrect F_CPU definition: `_delay_us()` timing depends entirely on an accurate F_CPU value. An incorrect clock definition will result in incorrect motor speed and timing behavior.
+- Expecting non-blocking behavior: `stepper_step()` halts foreground execution until all steps complete. This driver is not suitable for multitasking or real-time scheduling without external interrupt-driven logic.
+- Assuming mechanical limits match software limits: Theoretical RPM limits derived from delay clamps do not reflect real motor capabilities. Always consult the motor datasheet and validate behavior experimentally.
 
 ---
 
