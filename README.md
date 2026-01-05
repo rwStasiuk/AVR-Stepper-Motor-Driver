@@ -349,11 +349,3 @@ The following features are intentionally excluded from the current driver to pre
 - Optional interrupt-driven, non-blocking step engine
 
 > This feature fundamentally changes control flow and is intentionally out of scope for this blocking driver.
-
-
-
-
-
-
-
-
