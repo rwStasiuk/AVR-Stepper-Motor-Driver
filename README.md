@@ -214,6 +214,7 @@ stepper_set_direction(&motor1, CCW);
 - The user should pass their desired motor speed in RPM, multiplied by 100 (i.e. for a speed of 12.57rpm, pass 1257 to the setter function).
 - Speed control is implemented by changing the length of the delay between coil energization patterns.
 - Step delays are clamped between 50 and 1,000,000 microseconds, which means that motor speed is theoretically clamped between 0.03rpm and 585.94rpm by the driver. These values are purely theoretical and the achievable motor speed may vary based on the motor specifications. The `STEPPER_MIN_STEP_DELAY_US` and `STEPPER_MAX_STEP_DELAY_US` clamps are included in the API so that advanced users may adjust them as needed by redefining the macros in the application layer.
+- To help choose a motor speed, I recommend this [RPM visualizer page](https://makermotor.com/rpm-visualizer/?srsltid=AfmBOorT4bg39Lg4r5l91vC3d20FOrPo4gvL0gRoh0OE1g-nDfMMPZF6).
 
 ```c
 stepper_set_rpm_x100(&motor1, 1257);
@@ -268,6 +269,7 @@ The following issues account for most runtime errors and unexpected behavior:
 - Assuming mechanical limits match software limits: Theoretical RPM limits derived from delay clamps do not reflect real motor capabilities. Always consult the motor datasheet and validate behavior experimentally.
 
 It is recommended to read the commenting in the header file for further details.
+
 ---
 
 ## EXCEPTION HANDLING
